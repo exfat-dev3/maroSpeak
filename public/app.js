@@ -1,136 +1,97 @@
-const $ = (id) => document.getElementById(id);
+const textInput = document.getElementById("textInput");
+const language = document.getElementById("language");
+const quality = document.getElementById("quality");
 
-const engine = $("engine");
-const textInput = $("textInput");
-const generateBtn = $("generateBtn");
-const status = $("status");
-const playerPanel = $("playerPanel");
-const audio = $("audio");
+const generateBtn = document.getElementById("generateBtn");
+const generateText = document.getElementById("generateText");
+const generateIcon = document.getElementById("generateIcon");
 
-let currentBlob = null;
-let currentURL = null;
+const clearBtn = document.getElementById("clearBtn");
+const charCount = document.getElementById("charCount");
 
-let audioContext = null;
-let sourceNode = null;
-let lowFilter = null;
-let midFilter = null;
-let highFilter = null;
-let gainNode = null;
-let graphConnected = false;
+const status = document.getElementById("status");
+const qualityDescription = document.getElementById("qualityDescription");
 
-// 文字数
+const playerPanel = document.getElementById("playerPanel");
+const audioPlayer = document.getElementById("audioPlayer");
+const audioInfo = document.getElementElementById
+  ? document.getElementElementById("audioInfo")
+  : document.getElementById("audioInfo");
+
+const downloadBtn = document.getElementById("downloadBtn");
+
+let originalBuffer = null;
+let processedBuffer = null;
+let currentBlobUrl = null;
+let generatedBlob = null;
+
+/* ==========================
+   Quality descriptions
+========================== */
+
+const descriptions = {
+  normal: "Google TTSの元音声をそのまま再生します。",
+  smooth: "声のハスキーさや耳に刺さるザラつきを抑え、滑らかな音に調整します。",
+  clear: "音声の輪郭と明瞭感を軽く強調します。"
+};
+
+quality.addEventListener("change", () => {
+  qualityDescription.textContent = descriptions[quality.value];
+});
+
+/* ==========================
+   Character counter
+========================== */
+
 textInput.addEventListener("input", () => {
-  $("count").textContent = `${textInput.value.length}文字`;
+  charCount.textContent = `${textInput.value.length} / 2000`;
 });
 
-// エンジン選択
-engine.addEventListener("change", () => {
-  if (engine.value === "aquestalk") {
-    $("engineNotice").textContent =
-      "AquesTalkエンジンは未接続です。Google TTSを選択してください。";
-    status.textContent = "AquesTalkはまだ使用できません";
-    generateBtn.disabled = true;
-  } else {
-    $("engineNotice").textContent = "Google TTSを使用します。";
-    status.textContent = "テキストを入力してね";
-    generateBtn.disabled = false;
+/* ==========================
+   Clear
+========================== */
+
+clearBtn.addEventListener("click", () => {
+  textInput.value = "";
+  charCount.textContent = "0 / 2000";
+
+  status.textContent = "";
+  status.className = "status";
+
+  playerPanel.classList.add("hidden");
+
+  audioPlayer.pause();
+  audioPlayer.removeAttribute("src");
+  audioPlayer.load();
+
+  originalBuffer = null;
+  processedBuffer = null;
+  generatedBlob = null;
+
+  if (currentBlobUrl) {
+    URL.revokeObjectURL(currentBlobUrl);
+    currentBlobUrl = null;
   }
 });
 
-// 音質モードUI
-document.querySelectorAll(".quality-option").forEach((option) => {
-  option.addEventListener("click", () => {
-    document.querySelectorAll(".quality-option").forEach((el) => {
-      el.classList.remove("selected");
-    });
+/* ==========================
+   Generate audio
+========================== */
 
-    option.classList.add("selected");
-    option.querySelector("input").checked = true;
+generateBtn.addEventListener("click", generateAudio);
 
-    applyQuality();
-  });
-});
-
-// 音声グラフを作成
-function setupAudioGraph() {
-  if (graphConnected) return;
-
-  audioContext = new (window.AudioContext || window.webkitAudioContext)();
-
-  sourceNode = audioContext.createMediaElementSource(audio);
-
-  lowFilter = audioContext.createBiquadFilter();
-  lowFilter.type = "lowshelf";
-  lowFilter.frequency.value = 180;
-
-  midFilter = audioContext.createBiquadFilter();
-  midFilter.type = "peaking";
-  midFilter.frequency.value = 2800;
-  midFilter.Q.value = 0.8;
-
-  highFilter = audioContext.createBiquadFilter();
-  highFilter.type = "highshelf";
-  highFilter.frequency.value = 6000;
-
-  gainNode = audioContext.createGain();
-
-  sourceNode.connect(lowFilter);
-  lowFilter.connect(midFilter);
-  midFilter.connect(highFilter);
-  highFilter.connect(gainNode);
-  gainNode.connect(audioContext.destination);
-
-  graphConnected = true;
-}
-
-// 音質調整
-function applyQuality() {
-  if (!graphConnected) return;
-
-  const mode = document.querySelector(
-    'input[name="quality"]:checked'
-  ).value;
-
-  // Default
-  lowFilter.gain.value = 0;
-  midFilter.gain.value = 0;
-  highFilter.gain.value = 0;
-  gainNode.gain.value = 1;
-
-  if (mode === "linear") {
-    // くっきり (Linear)
-    lowFilter.gain.value = -1.5;
-    midFilter.gain.value = 2.0;
-    highFilter.gain.value = 1.8;
-    gainNode.gain.value = 0.95;
-  }
-
-  if (mode === "clear") {
-    // クリア
-    lowFilter.gain.value = -3.5;
-    midFilter.gain.value = 2.5;
-    highFilter.gain.value = 1.0;
-    gainNode.gain.value = 1.0;
-  }
-}
-
-// 読み上げ生成
-generateBtn.addEventListener("click", async () => {
+async function generateAudio() {
   const text = textInput.value.trim();
 
   if (!text) {
-    status.textContent = "テキストを入力してください";
+    showStatus("テキストを入力してください。", "error");
+    textInput.focus();
     return;
   }
 
-  if (engine.value !== "google") {
-    status.textContent = "利用可能なエンジンを選択してください";
-    return;
-  }
-
-  generateBtn.disabled = true;
-  generateBtn.innerHTML = "⏳ 音声を生成中...";
-  status.textContent = "Google TTSに接続しています...";
+  setLoading(true);
+  showStatus("音声を生成しています...", "loading");
+  playerPanel.classList.add("hidden");
 
   try {
     const response = await fetch("/api/tts", {
@@ -140,63 +101,289 @@ generateBtn.addEventListener("click", async () => {
       },
       body: JSON.stringify({
         text,
-        lang: "ja"
+        lang: language.value,
+        slow: false
       })
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || "音声生成に失敗しました");
+      let errorMessage = "音声生成に失敗しました。";
+
+      try {
+        const errorData = await response.json();
+        if (errorData.error) errorMessage = errorData.error;
+      } catch {}
+
+      throw new Error(errorMessage);
     }
 
-    currentBlob = await response.blob();
+    const mp3Blob = await response.blob();
 
-    if (currentURL) {
-      URL.revokeObjectURL(currentURL);
-    }
+    const arrayBuffer = await mp3Blob.arrayBuffer();
 
-    currentURL = URL.createObjectURL(currentBlob);
-    audio.src = currentURL;
+    const audioContext = new AudioContext();
+
+    originalBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+    await audioContext.close();
+
+    await updateAudio();
 
     playerPanel.classList.remove("hidden");
-    $("audioMode").textContent = "Google TTS · 日本語";
 
-    setupAudioGraph();
-    applyQuality();
+    showStatus("音声生成が完了しました！", "success");
 
-    await audioContext.resume();
-
-    audio.load();
-    await audio.play();
-
-    status.textContent = "音声生成完了！";
   } catch (error) {
     console.error(error);
-    status.textContent = error.message || "エラーが発生しました";
+    showStatus(error.message || "エラーが発生しました。", "error");
   } finally {
-    generateBtn.disabled = false;
-    generateBtn.innerHTML = "<span>▶</span> 読み上げ";
+    setLoading(false);
   }
+}
+
+/* ==========================
+   Audio processing
+========================== */
+
+async function updateAudio() {
+  if (!originalBuffer) return;
+
+  const mode = quality.value;
+
+  // 標準は原音を使う
+  if (mode === "normal") {
+    processedBuffer = originalBuffer;
+    generatedBlob = null;
+
+    setPlayerSource(originalBuffer);
+
+    audioInfo.textContent = "標準音質・オリジナル音声";
+
+    return;
+  }
+
+  showStatus("音質を調整しています...", "loading");
+
+  processedBuffer = await processAudio(originalBuffer, mode);
+
+  generatedBlob = bufferToWav(processedBuffer);
+
+  setPlayerSource(processedBuffer);
+
+  audioInfo.textContent =
+    mode === "smooth"
+      ? "くっきり・ハスキー感軽減"
+      : "クリア・明瞭度調整";
+}
+
+/* ==========================
+   Offline audio effects
+========================== */
+
+async function processAudio(inputBuffer, mode) {
+  const sampleRate = inputBuffer.sampleRate;
+
+  const offline = new OfflineAudioContext(
+    inputBuffer.numberOfChannels,
+    inputBuffer.length,
+    sampleRate
+  );
+
+  const source = offline.createBufferSource();
+  source.buffer = inputBuffer;
+
+  let lastNode = source;
+
+  // 低周波ノイズ・不要な低音を整理
+  const highpass = offline.createBiquadFilter();
+  highpass.type = "highpass";
+  highpass.frequency.value = mode === "smooth" ? 90 : 70;
+  highpass.Q.value = 0.707;
+
+  lastNode.connect(highpass);
+  lastNode = highpass;
+
+  if (mode === "smooth") {
+    // 中高域の耳障りな粗さを控えめに抑える
+    const smoothEQ = offline.createBiquadFilter();
+    smoothEQ.type = "peaking";
+    smoothEQ.frequency.value = 3400;
+    smoothEQ.Q.value = 0.85;
+    smoothEQ.gain.value = -3.5;
+
+    lastNode.connect(smoothEQ);
+    lastNode = smoothEQ;
+
+    // 高域を少しだけ丸める
+    const highShelf = offline.createBiquadFilter();
+    highShelf.type = "highshelf";
+    highShelf.frequency.value = 7500;
+    highShelf.gain.value = -2.0;
+
+    lastNode.connect(highShelf);
+    lastNode = highShelf;
+
+    // 強い音のピークを穏やかにする
+    const compressor = offline.createDynamicsCompressor();
+    compressor.threshold.value = -22;
+    compressor.knee.value = 18;
+    compressor.ratio.value = 2.3;
+    compressor.attack.value = 0.008;
+    compressor.release.value = 0.16;
+
+    lastNode.connect(compressor);
+    lastNode = compressor;
+  }
+
+  if (mode === "clear") {
+    // 明瞭感を少し出す
+    const presence = offline.createBiquadFilter();
+    presence.type = "peaking";
+    presence.frequency.value = 2600;
+    presence.Q.value = 0.8;
+    presence.gain.value = 1.6;
+
+    lastNode.connect(presence);
+    lastNode = presence;
+
+    const clarityShelf = offline.createBiquadFilter();
+    clarityShelf.type = "highshelf";
+    clarityShelf.frequency.value = 6500;
+    clarityShelf.gain.value = 1.0;
+
+    lastNode.connect(clarityShelf);
+    lastNode = clarityShelf;
+  }
+
+  // 音量を整える
+  const gain = offline.createGain();
+  gain.gain.value = 1.0;
+
+  lastNode.connect(gain);
+  gain.connect(offline.destination);
+
+  source.start(0);
+
+  return await offline.startRendering();
+}
+
+/* ==========================
+   Player source
+========================== */
+
+function setPlayerSource(buffer) {
+  const blob = bufferToWav(buffer);
+
+  if (currentBlobUrl) {
+    URL.revokeObjectURL(currentBlobUrl);
+  }
+
+  currentBlobUrl = URL.createObjectURL(blob);
+
+  audioPlayer.src = currentBlobUrl;
+  audioPlayer.load();
+}
+
+/* ==========================
+   WAV encoder
+========================== */
+
+function bufferToWav(audioBuffer) {
+  const channels = audioBuffer.numberOfChannels;
+  const sampleRate = audioBuffer.sampleRate;
+  const frames = audioBuffer.length;
+
+  const bitDepth = 16;
+  const bytesPerSample = bitDepth / 8;
+
+  const dataSize = frames * channels * bytesPerSample;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  function writeString(offset, str) {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
+    }
+  }
+
+  writeString(0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(8, "WAVE");
+  writeString(12, "fmt ");
+
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, channels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * channels * bytesPerSample, true);
+  view.setUint16(32, channels * bytesPerSample, true);
+  view.setUint16(34, bitDepth, true);
+
+  writeString(36, "data");
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+
+  for (let i = 0; i < frames; i++) {
+    for (let channel = 0; channel < channels; channel++) {
+      let sample = audioBuffer.getChannelData(channel)[i];
+
+      sample = Math.max(-1, Math.min(1, sample));
+
+      const value = sample < 0
+        ? sample * 32768
+        : sample * 32767;
+
+      view.setInt16(offset, value, true);
+      offset += 2;
+    }
+  }
+
+  return new Blob([buffer], {
+    type: "audio/wav"
+  });
+}
+
+/* ==========================
+   Download
+========================== */
+
+downloadBtn.addEventListener("click", () => {
+  if (!originalBuffer) return;
+
+  const blob = quality.value === "normal"
+    ? bufferToWav(originalBuffer)
+    : generatedBlob || bufferToWav(processedBuffer);
+
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "maroSpeak.wav";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 
-// 停止
-$("stopBtn").addEventListener("click", () => {
-  audio.pause();
-  audio.currentTime = 0;
-  status.textContent = "停止しました";
-});
+/* ==========================
+   UI helpers
+========================== */
 
-// MP3ダウンロード
-$("downloadBtn").addEventListener("click", () => {
-  if (!currentBlob) return;
+function showStatus(message, type = "") {
+  status.textContent = message;
+  status.className = `status ${type}`;
+}
 
-  const link = document.createElement("a");
-  link.href = currentURL;
-  link.download = "maroSpeak.mp3";
-  link.click();
-});
+function setLoading(loading) {
+  generateBtn.disabled = loading;
 
-// 再生終了
-audio.addEventListener("ended", () => {
-  status.textContent = "再生完了";
-});
+  if (loading) {
+    generateText.textContent = "生成中...";
+    generateIcon.textContent = "⏳";
+  } else {
+    generateText.textContent = "音声を生成";
+    generateIcon.textContent = "♫";
+  }
+}
