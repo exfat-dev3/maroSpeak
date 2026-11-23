@@ -2,115 +2,110 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>maroSpeak</title>
-  <meta name="theme-color" content="#10131c">
+  <meta name="theme-color" content="#6478e8">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div class="app">
-    <header>
-      <div class="logo">m<span>aro</span>Speak</div>
-      <div class="header-label">TEXT TO SPEECH</div>
-    </header>
 
-    <main>
-      <section class="hero">
-        <div class="tag">VOICE STUDIO</div>
-        <h1>テキストを、<span>音声に。</span></h1>
-        <p>文字を入力して、好きな音声で読み上げよう。</p>
-      </section>
+<div class="app">
 
-      <section class="panel">
-        <label class="section-title" for="engine">読み上げエンジン</label>
+  <header>
+    <div class="logo">m</div>
+    <div class="brand">
+      <h1>maroSpeak</h1>
+      <p>Text to Speech Studio</p>
+    </div>
+    <span class="version">v1.2</span>
+  </header>
 
-        <select id="engine">
-          <option value="google">Google TTS</option>
-          <option value="aquestalk">AquesTalk (未接続)</option>
-        </select>
+  <main>
+    <div class="intro">
+      <h2>テキストを音声に変換</h2>
+      <p>文章を入力して、音声を生成しよう。</p>
+    </div>
 
-        <div id="engineNotice" class="notice">
-          Google TTSを使用します。
+    <section class="panel">
+
+      <label for="textInput">テキスト</label>
+
+      <textarea
+        id="textInput"
+        maxlength="2000"
+        placeholder="ここに読み上げたい文章を入力..."
+      ></textarea>
+
+      <div class="text-meta">
+        <span id="charCount">0 / 2000</span>
+        <button id="clearBtn" class="text-btn">クリア</button>
+      </div>
+
+      <div class="settings">
+        <div class="setting">
+          <label for="language">言語</label>
+          <select id="language">
+            <option value="ja">日本語</option>
+            <option value="en">English</option>
+            <option value="ko">韓国語</option>
+            <option value="zh-cn">中国語</option>
+          </select>
         </div>
 
-        <div class="text-heading">
-          <label class="section-title" for="textInput">読み上げテキスト</label>
-          <span id="count">0文字</span>
+        <div class="setting">
+          <label for="quality">音質</label>
+          <select id="quality">
+            <option value="normal">標準</option>
+            <option value="smooth">くっきり</option>
+            <option value="clear">クリア</option>
+          </select>
         </div>
+      </div>
 
-        <textarea id="textInput" maxlength="5000"
-          placeholder="ここに読み上げたい文章を入力…"></textarea>
+      <div class="quality-info" id="qualityInfo">
+        <span class="info-icon">ⓘ</span>
+        <span id="qualityDescription">
+          Google TTSの元音声をそのまま再生します。
+        </span>
+      </div>
 
-        <div class="text-footer">
-          <span>日本語対応</span>
-          <span>最大5000文字</span>
+      <button id="generateBtn" class="generate-btn">
+        <span id="generateIcon">♫</span>
+        <span id="generateText">音声を生成</span>
+      </button>
+
+      <div id="status" class="status"></div>
+
+    </section>
+
+    <section id="playerPanel" class="panel player-panel hidden">
+
+      <div class="player-heading">
+        <div class="music-icon">♫</div>
+        <div>
+          <h3>生成された音声</h3>
+          <p id="audioInfo">再生準備完了</p>
         </div>
+      </div>
 
-        <label class="section-title quality-label">音質変化モード</label>
+      <audio id="audioPlayer" controls></audio>
 
-        <div class="quality-list">
-          <label class="quality-option selected">
-            <input type="radio" name="quality" value="default" checked>
-            <div class="quality-info">
-              <strong>Default</strong>
-              <small>標準音声・加工なし</small>
-            </div>
-            <span class="radio-mark"></span>
-          </label>
-
-          <label class="quality-option">
-            <input type="radio" name="quality" value="linear">
-            <div class="quality-info">
-              <strong>くっきり (Linear)</strong>
-              <small>音声の輪郭を調整</small>
-            </div>
-            <span class="radio-mark"></span>
-          </label>
-
-          <label class="quality-option">
-            <input type="radio" name="quality" value="clear">
-            <div class="quality-info">
-              <strong>クリア</strong>
-              <small>こもりを抑えて明瞭に</small>
-            </div>
-            <span class="radio-mark"></span>
-          </label>
-        </div>
-
-        <button id="generateBtn" class="primary-button">
-          <span>▶</span> 読み上げ
+      <div class="player-actions">
+        <button id="downloadBtn" class="download-btn">
+          ↓ 音声をダウンロード
         </button>
+      </div>
 
-        <div id="status" class="status">テキストを入力してね</div>
-      </section>
+    </section>
 
-      <section id="playerPanel" class="panel player hidden">
-        <div class="player-title">
-          <div class="audio-icon">♫</div>
-          <div>
-            <strong>生成された音声</strong>
-            <small id="audioMode">Google TTS</small>
-          </div>
-        </div>
+    <div class="footer-note">
+      <span>Powered by Google TTS</span>
+      <span>maroSpeak</span>
+    </div>
+  </main>
 
-        <audio id="audio" controls></audio>
+</div>
 
-        <div class="player-actions">
-          <button id="stopBtn" class="secondary-button">■ 停止</button>
-          <button id="downloadBtn" class="secondary-button">↓ MP3保存</button>
-        </div>
-        <div class="download-note">
-          MP3保存は生成された元音声です。音質モードはブラウザ再生に適用されます。
-        </div>
-      </section>
-    </main>
-
-    <footer>
-      <div>maroSpeak <span>v1.0</span></div>
-      <small>Powered by Google TTS</small>
-    </footer>
-  </div>
-
-  <script src="/app.js"></script>
+<script src="/app.js"></script>
 </body>
 </html>
