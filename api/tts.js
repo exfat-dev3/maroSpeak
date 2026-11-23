@@ -1,59 +1,61 @@
-import googleTTS from "google-tts-api";
+const googleTTS = require("google-tts-api");
 
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
-    return res.status(405).json({
-      error: "POST only"
-    });
+    res.status(405).json({ error: "Method not allowed" });
+    return;
   }
 
   try {
-    const { text, lang = "ja" } = req.body || {};
+    const { text, lang = "ja", slow = false } = req.body || {};
 
-    if (!text || typeof text !== "string") {
+    if (!text || !text.trim()) {
       return res.status(400).json({
         error: "テキストを入力してください"
       });
     }
 
-    if (text.length > 5000) {
+    if (text.length > 2000) {
       return res.status(400).json({
-        error: "文字数は5000文字以内にしてください"
+        error: "テキストは2000文字以内にしてください"
       });
     }
 
-    const chunks = googleTTS.getAllAudioUrls(text, {
+    const urls = await googleTTS.getAllAudioUrls(text, {
       lang,
-      slow: false,
+      slow,
       host: "https://translate.google.com"
     });
 
-    const audioBuffers = [];
+    const buffers = [];
 
-    for (const chunk of chunks) {
-      const response = await fetch(chunk.url);
+    for (const item of urls) {
+      const response = await fetch(item.url);
 
       if (!response.ok) {
-        throw new Error("Google TTSから音声を取得できませんでした");
+        throw new Error("音声生成に失敗しました");
       }
 
-      const buffer = Buffer.from(await response.arrayBuffer());
-      audioBuffers.push(buffer);
+      const buffer = Buffer.from(
+        await response.arrayBuffer()
+      );
+
+      buffers.push(buffer);
     }
 
-    const mp3 = Buffer.concat(audioBuffers);
+    const audio = Buffer.concat(buffers);
 
     res.setHeader("Content-Type", "audio/mpeg");
-    res.setHeader("Content-Disposition", 'inline; filename="maroSpeak.mp3"');
     res.setHeader("Cache-Control", "no-store");
 
-    return res.status(200).send(mp3);
+    return res.status(200).send(audio);
+
   } catch (error) {
-    console.error("maroSpeak TTS Error:", error);
+    console.error("TTS Error:", error);
 
     return res.status(500).json({
-      error: "音声生成に失敗しました。時間をおいて再試行してください。"
+      error: "音声生成に失敗しました",
+      details: error.message
     });
   }
-}
+};
